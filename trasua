@@ -1,0 +1,153 @@
+import streamlit as st
+import pandas as pd
+from datetime import datetime
+
+# Cấu hình trang
+st.set_page_config(
+    page_title="Quản Lý Hóa Đơn Trà Sữa",
+    page_icon="🧋",
+    layout="wide"
+)
+
+# Khởi tạo session_state để lưu danh sách món trong hóa đơn hiện tại
+if "cart" not in st.session_state:
+    st.session_state.cart = []
+
+# Bảng giá quy định
+MENU_TRA_SUA = {
+    "Trà sữa Truyền thống": 25000,
+    "Trà sữa Ô long": 30000,
+    "Trà sữa Thái xanh": 28000,
+    "Trà sữa Matcha": 32000,
+    "Trà sữa Hạt dẻ": 35000,
+    "Trà đào cam sả": 30000,
+    "Hồng trà Kem cheese": 35000
+}
+
+TOPPING_PRICE = {
+    "Trân châu đen": 5000,
+    "Trân châu trắng": 5000,
+    "Thạch trái cây": 5000,
+    "Pudding trứng": 7000,
+    "Kem cheese": 8000,
+    "Sương sáo": 5000
+}
+
+SIZE_PRICE = {
+    "S": 0,
+    "M": 5000,
+    "L": 10000
+}
+
+st.title("🧋 Hệ Thống Tính Tiền & In Hóa Đơn Trà Sữa")
+st.write("---")
+
+# Tạo 2 cột: Cột trái nhập thông tin, cột phải xem hóa đơn
+col1, col2 = st.columns([1, 1])
+
+with col1:
+    st.subheader("📝 Thông tin đơn hàng")
+    
+    # 1. Thông tin khách hàng
+    customer_name = st.text_input("Tên khách hàng:", value="Khách lẻ")
+    
+    st.markdown("---")
+    st.write("### Thêm món vào hóa đơn")
+    
+    # 2. Chọn loại trà sữa
+    drink = st.selectbox("Chọn loại trà sữa / đồ uống:", list(MENU_TRA_SUA.keys()))
+    
+    # 3. Chọn Size
+    size = st.radio("Chọn Size:", ["S", "M", "L"], index=1, horizontal=True)
+    
+    # 4. Chọn mức đường & đá
+    col_ice, col_sugar = st.columns(2)
+    with col_ice:
+        ice = st.select_slider("Lượng đá:", options=["0%", "30%", "50%", "70%", "100%"], value="100%")
+    with col_sugar:
+        sugar = st.select_slider("Lượng đường:", options=["0%", "30%", "50%", "70%", "100%"], value="100%")
+        
+    # 5. Chọn Topping
+    toppings = st.multiselect("Chọn Topping (có thể chọn nhiều):", list(TOPPING_PRICE.keys()))
+    
+    # Ghi chú thêm
+    note = st.text_input("Ghi chú thêm (VD: ít ngọt, mang về...):", "")
+    
+    # Tính giá tiền cho 1 ly hiện tại
+    base_price = MENU_TRA_SUA[drink]
+    size_extra = SIZE_PRICE[size]
+    topping_extra = sum([TOPPING_PRICE[t] for t in toppings])
+    unit_price = base_price + size_extra + topping_extra
+    
+    quantity = st.number_input("Số lượng ly:", min_value=1, value=1, step=1)
+    item_total = unit_price * quantity
+    
+    st.write(f"**Đơn giá ly này:** {unit_price:,} VNĐ (Tổng: {item_total:,} VNĐ)")
+    
+    # Nút thêm món vào giỏ
+    if st.button("➕ Thêm món vào hóa đơn", type="primary"):
+        item = {
+            "Tên món": drink,
+            "Size": size,
+            "Đường/Đá": f"{sugar} đường / {ice} đá",
+            "Topping": ", ".join(toppings) if toppings else "Không",
+            "Đơn giá": unit_price,
+            "Số lượng": quantity,
+            "Thành tiền": item_total,
+            "Ghi chú": note
+        }
+        st.session_state.cart.append(item)
+        st.success(f"Đã thêm {quantity} {drink} vào hóa đơn!")
+
+with col2:
+    st.subheader("🧾 Chi tiết hóa đơn")
+    
+    if len(st.session_state.cart) == 0:
+        st.info("Chưa có món nào được chọn. Vui lòng chọn món ở cột bên trái.")
+    else:
+        # Chuyển giỏ hàng thành DataFrame
+        df_cart = pd.DataFrame(st.session_state.cart)
+        
+        # Hiển thị bảng chi tiết các món
+        st.dataframe(
+            df_cart[["Tên món", "Size", "Đường/Đá", "Topping", "Số lượng", "Thành tiền"]],
+            use_container_width=True
+        )
+        
+        # Tính tổng tiền toàn bộ hóa đơn
+        grand_total = df_cart["Thành tiền"].sum()
+        
+        st.markdown("---")
+        st.markdown(f"### **TỔNG TIỀN: :red[{grand_total:,} VNĐ]**")
+        
+        # Tạo giao diện Hóa đơn để xem trước / in
+        with st.expander("📄 Xem bản xem trước hóa đơn thanh toán", expanded=True):
+            now = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            st.markdown(f"**CỬA HÀNG TRÀ SỮA JOY TEA**")
+            st.markdown(f"**Khách hàng:** {customer_name}")
+            st.markdown(f"**Thời gian:** {now}")
+            st.markdown("---")
+            
+            for idx, row in df_cart.iterrows():
+                st.write(f"**{idx + 1}. {row['Tên món']} (Size {row['Size']})** x{row['Số lượng']}")
+                st.caption(f"↳ {row['Đường/Đá']} | Topping: {row['Topping']}")
+                if row['Ghi chú']:
+                    st.caption(f"↳ Ghi chú: {row['Ghi chú']}")
+                st.write(f"Thành tiền: **{row['Thành tiền']:,} VNĐ**")
+                st.write("---")
+                
+            st.markdown(f"### **Tổng thanh toán: {grand_total:,} VNĐ**")
+            st.write("✨ Cảm ơn quý khách và hẹn gặp lại! ✨")
+            
+        # Nút xóa/làm mới hóa đơn
+        col_btn1, col_btn2 = st.columns(2)
+        with col_btn1:
+            if st.button("🗑️ Xóa làm mới hóa đơn"):
+                st.session_state.cart = []
+                st.rerun()
+        with col_btn2:
+            if st.button("✅ Hoàn tất / In hóa đơn"):
+                st.balloons()
+                st.success("Đơn hàng đã được lưu và thanh toán thành công!")
+                # Xóa giỏ hàng sau khi thanh toán thành công
+                st.session_state.cart = []
